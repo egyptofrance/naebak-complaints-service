@@ -1,0 +1,291 @@
+name: Manus-Controlled CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  MANUS_EVALUATOR_URL: https://8000-i11hedxmx2e1lalatmdgh-08017331.manusvm.computer
+  MANUS_EVALUATOR_ENABLED: true
+
+jobs:
+  manus-honesty-check:
+    name: Manus Honesty & Exaggeration Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install Manus Control Tools
+      run: |
+        pip install requests pyyaml
+        
+    - name: Check Commit Messages for Exaggeration
+      run: |
+        python scripts/manus_commit_checker.py
+        
+    - name: Scan Code for Exaggerated Claims
+      run: |
+        python scripts/manus_code_scanner.py
+        
+    - name: Validate Documentation Honesty
+      run: |
+        python scripts/manus_docs_validator.py
+
+  security-and-quality:
+    name: Security & Code Quality
+    runs-on: ubuntu-latest
+    needs: manus-honesty-check
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install bandit safety flake8 black isort
+        
+    - name: Security scan with Bandit
+      run: bandit -r . -f json -o bandit-report.json || true
+      
+    - name: Dependency vulnerability check
+      run: safety check --json --output safety-report.json || true
+      
+    - name: Code style check
+      run: |
+        black --check .
+        isort --check-only .
+        flake8 .
+
+  manus-integration-test:
+    name: Manus Integration Testing
+    runs-on: ubuntu-latest
+    needs: [manus-honesty-check, security-and-quality]
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install pytest pytest-django pytest-cov
+        
+    - name: Test Manus Integration
+      run: |
+        python -m pytest tests/test_manus_integration.py -v
+        
+    - name: Test Manus Middleware
+      run: |
+        python -m pytest tests/test_manus_middleware.py -v
+        
+    - name: Validate Manus Evaluator Connection
+      run: |
+        python scripts/test_manus_connection.py
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: manus-integration-test
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install pytest pytest-django pytest-cov
+        
+    - name: Run unit tests
+      run: |
+        python -m pytest tests/unit/ -v --cov=. --cov-report=xml
+        
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_naibak
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install pytest pytest-django
+        
+    - name: Run integration tests
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_naibak
+      run: |
+        python -m pytest tests/integration/ -v
+
+  manus-controlled-build:
+    name: Manus-Controlled Docker Build
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Validate Dockerfile for Manus Integration
+      run: |
+        python scripts/validate_dockerfile_manus.py
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+      
+    - name: Build Docker image
+      run: |
+        docker build -t naibak-service:${{ github.sha }} .
+        
+    - name: Test Docker image with Manus
+      run: |
+        docker run --rm -d --name test-service -p 8000:8000 naibak-service:${{ github.sha }}
+        sleep 10
+        python scripts/test_docker_manus_integration.py
+        docker stop test-service
+
+  manus-deployment-validation:
+    name: Manus Deployment Validation
+    runs-on: ubuntu-latest
+    needs: manus-controlled-build
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Validate Deployment Configuration
+      run: |
+        python scripts/validate_deployment_manus.py
+        
+    - name: Check Manus Evaluator Availability
+      run: |
+        curl -f $MANUS_EVALUATOR_URL/health || exit 1
+        
+    - name: Pre-deployment Manus Test
+      run: |
+        python scripts/pre_deployment_manus_test.py
+
+  deploy:
+    name: Deploy to Google Cloud Run
+    runs-on: ubuntu-latest
+    needs: manus-deployment-validation
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        export_default_credentials: true
+        
+    - name: Configure Docker for GCR
+      run: gcloud auth configure-docker
+      
+    - name: Build and push Docker image
+      run: |
+        docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/naibak-service:${{ github.sha }} .
+        docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/naibak-service:${{ github.sha }}
+        
+    - name: Deploy to Cloud Run with Manus Integration
+      run: |
+        gcloud run deploy naibak-service \
+          --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/naibak-service:${{ github.sha }} \
+          --platform managed \
+          --region us-central1 \
+          --allow-unauthenticated \
+          --set-env-vars MANUS_EVALUATOR_URL=$MANUS_EVALUATOR_URL \
+          --set-env-vars MANUS_EVALUATOR_ENABLED=true \
+          --memory 1Gi \
+          --cpu 1 \
+          --max-instances 10
+          
+    - name: Post-deployment Manus Validation
+      run: |
+        sleep 30
+        python scripts/post_deployment_manus_test.py
+
+  manus-monitoring-setup:
+    name: Setup Manus Monitoring
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Manus Monitoring Alerts
+      run: |
+        python scripts/setup_manus_monitoring.py
+        
+    - name: Create Manus Dashboard
+      run: |
+        python scripts/create_manus_dashboard.py
+        
+    - name: Test Monitoring Integration
+      run: |
+        python scripts/test_manus_monitoring.py
+
+  notify-success:
+    name: Notify Deployment Success
+    runs-on: ubuntu-latest
+    needs: [deploy, manus-monitoring-setup]
+    if: success()
+    steps:
+    - name: Notify Success
+      run: |
+        echo "✅ Manus-Controlled Deployment Successful!"
+        echo "🛡️ All Manus honesty checks passed"
+        echo "🚀 Service deployed with Manus integration"
+        echo "📊 Monitoring and alerts configured"
+
+  notify-failure:
+    name: Notify Deployment Failure
+    runs-on: ubuntu-latest
+    needs: [manus-honesty-check, security-and-quality, manus-integration-test, unit-tests, integration-tests, manus-controlled-build, manus-deployment-validation, deploy]
+    if: failure()
+    steps:
+    - name: Notify Failure
+      run: |
+        echo "❌ Manus-Controlled Deployment Failed!"
+        echo "🚨 Check logs for Manus honesty violations"
+        echo "🔍 Review failed checks and fix issues"
+        echo "📋 Ensure all Manus integration tests pass"

@@ -308,8 +308,8 @@ jobs:
           context: .
           push: true
           tags: |
-            gcr.io/${{ secrets.GCP_PROJECT_ID }}/naibak-complaints-service:${{ github.sha }}
-            gcr.io/${{ secrets.GCP_PROJECT_ID }}/naibak-complaints-service:latest
+            gcr.io/${{ secrets.GCP_PROJECT_ID }}/naibak-auth-service:${{ github.sha }}
+            gcr.io/${{ secrets.GCP_PROJECT_ID }}/naibak-auth-service:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -320,7 +320,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     environment: 
       name: production
-      url: https://naibak-complaints-service.a.run.app
+      url: https://naibak-auth-service.a.run.app
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -333,8 +333,8 @@ jobs:
 
       - name: Deploy to Cloud Run (Production) - Zero Downtime
         run: |
-          gcloud run deploy naibak-complaints-service \
-            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/naibak-complaints-service:${{ github.sha }} \
+          gcloud run deploy naibak-auth-service \
+            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/naibak-auth-service:${{ github.sha }} \
             --platform managed \
             --region us-central1 \
             --allow-unauthenticated \
@@ -347,12 +347,12 @@ jobs:
 
       - name: Canary Deployment with Health Checks
         run: |
-          SERVICE_URL=$(gcloud run services describe naibak-complaints-service \
+          SERVICE_URL=$(gcloud run services describe naibak-auth-service \
             --region=us-central1 \
             --format='value(status.url)')
           
           # 10% traffic
-          gcloud run services update-traffic naibak-complaints-service \
+          gcloud run services update-traffic naibak-auth-service \
             --to-revisions=LATEST=10 \
             --region=us-central1
           
@@ -360,7 +360,7 @@ jobs:
           curl -f "${SERVICE_URL}/health" || exit 1
           
           # 50% traffic
-          gcloud run services update-traffic naibak-complaints-service \
+          gcloud run services update-traffic naibak-auth-service \
             --to-revisions=LATEST=50 \
             --region=us-central1
           
@@ -368,7 +368,7 @@ jobs:
           curl -f "${SERVICE_URL}/health" || exit 1
           
           # 100% traffic
-          gcloud run services update-traffic naibak-complaints-service \
+          gcloud run services update-traffic naibak-auth-service \
             --to-revisions=LATEST=100 \
             --region=us-central1
 

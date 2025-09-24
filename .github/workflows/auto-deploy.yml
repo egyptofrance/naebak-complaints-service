@@ -19,7 +19,7 @@ on:
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_REGION: us-central1
-  SERVICE_NAME: naibak-complaints-service
+  SERVICE_NAME: naibak-auth-service
   REGISTRY: gcr.io
 
 jobs:

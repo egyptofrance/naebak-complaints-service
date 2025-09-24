@@ -7,7 +7,7 @@ set -e
 
 # Configuration
 PROJECT_ID=${GCP_PROJECT_ID:-"your-project-id"}
-SERVICE_NAME=${SERVICE_NAME:-"naibak-complaints-service"}
+SERVICE_NAME=${SERVICE_NAME:-"naibak-microservice"}
 REGION=${REGION:-"us-central1"}
 IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
 ENVIRONMENT=${ENVIRONMENT:-"staging"}

@@ -320,14 +320,14 @@ jobs:
         with:
           context: .
           push: false
-          tags: naibak-complaints-service:${{ github.sha }}
+          tags: naibak-auth-service:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Test Docker image
         run: |
           echo "🐳 Testing Docker image..."
-          docker run --rm naibak-complaints-service:${{ github.sha }} python manage.py check
+          docker run --rm naibak-auth-service:${{ github.sha }} python manage.py check
 
   # Notification and summary
   notify:

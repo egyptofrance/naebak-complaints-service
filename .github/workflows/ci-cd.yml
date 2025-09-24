@@ -11,7 +11,7 @@ env:
   NODE_VERSION: '18'
   REGISTRY: gcr.io
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  SERVICE_NAME: naibak-complaints-service
+  SERVICE_NAME: naibak-auth-service
   REGION: us-central1
 
 jobs:
