@@ -9,7 +9,30 @@ import uuid
 
 
 class Governorate(models.Model):
-    """نموذج المحافظات المصرية"""
+    """
+    نموذج المحافظات المصرية - Egyptian Governorates Model
+    
+    يحتوي على جميع المحافظات المصرية الـ 27 مع معلوماتها الأساسية.
+    يستخدم لتصنيف الشكاوى جغرافياً وتوجيهها للممثلين المناسبين.
+    
+    Attributes:
+        name (CharField): اسم المحافظة بالعربية
+        name_en (CharField): اسم المحافظة بالإنجليزية
+        code (CharField): كود المحافظة الرسمي (3 أحرف)
+        is_active (BooleanField): حالة تفعيل المحافظة
+        display_order (PositiveIntegerField): ترتيب العرض في القوائم
+        
+    Business Logic:
+        - تستخدم لتصنيف الشكاوى حسب المنطقة الجغرافية
+        - تساعد في توجيه الشكاوى للممثلين المناسبين
+        - يمكن إلغاء تفعيل محافظة مؤقتاً دون حذف بياناتها
+        - ترتيب العرض يحدد أولوية ظهور المحافظات في القوائم
+        
+    Usage:
+        - في نماذج تقديم الشكاوى لاختيار المحافظة
+        - في تصفية الشكاوى حسب المنطقة
+        - في إحصائيات الشكاوى الجغرافية
+    """
     name = models.CharField('اسم المحافظة', max_length=50, unique=True)
     name_en = models.CharField('الاسم بالإنجليزية', max_length=50)
     code = models.CharField('الكود', max_length=3, unique=True)
@@ -34,7 +57,44 @@ class Governorate(models.Model):
 
 
 class ComplaintType(models.Model):
-    """نموذج أنواع الشكاوى"""
+    """
+    نموذج أنواع الشكاوى - Complaint Types Model
+    
+    يحدد أنواع الشكاوى المختلفة المتاحة في النظام مع تصنيفاتها وأولوياتها.
+    يساعد في توجيه الشكاوى للجهات المختصة وتحديد مستوى الأولوية.
+    
+    Attributes:
+        name (CharField): اسم نوع الشكوى بالعربية
+        name_en (CharField): اسم نوع الشكوى بالإنجليزية
+        description (TextField): وصف مفصل لنوع الشكوى
+        category (CharField): التصنيف العام (بنية تحتية، صحة، تعليم، إلخ)
+        target_council (CharField): المجلس المختص (نواب، شيوخ، أو كلاهما)
+        priority_level (CharField): مستوى الأولوية الافتراضي
+        icon (CharField): اسم الأيقونة للعرض في الواجهة
+        
+    Business Logic:
+        - كل شكوى يجب أن تنتمي لنوع محدد
+        - النوع يحدد المجلس المختص بالمتابعة
+        - مستوى الأولوية يؤثر على ترتيب المعالجة
+        - التصنيف يساعد في الإحصائيات والتقارير
+        - الأيقونة تحسن تجربة المستخدم في الواجهة
+        
+    Categories:
+        - infrastructure: البنية التحتية (طرق، مياه، كهرباء)
+        - health: الصحة (مستشفيات، أدوية، خدمات طبية)
+        - education: التعليم (مدارس، جامعات، مناهج)
+        - security: الأمن (شرطة، أمن عام)
+        - public_services: الخدمات العامة (بريد، اتصالات)
+        - transportation: النقل والمواصلات
+        - environment: البيئة (تلوث، نظافة)
+        - housing: الإسكان (مشاريع إسكان، عقارات)
+        - employment: العمل والتوظيف
+        - social: الشؤون الاجتماعية
+        - legislation: القوانين والتشريعات
+        - constitutional: الشؤون الدستورية
+        - foreign_policy: السياسة الخارجية
+        - economic: الشؤون الاقتصادية
+    """
     
     COUNCIL_CHOICES = [
         ('parliament', 'مجلس النواب'),
@@ -126,7 +186,53 @@ class ComplaintType(models.Model):
 
 
 class Complaint(models.Model):
-    """نموذج الشكوى"""
+    """
+    نموذج الشكوى الرئيسي - Main Complaint Model
+    
+    النموذج الأساسي لإدارة الشكاوى في النظام. يحتوي على جميع المعلومات
+    اللازمة لتتبع الشكوى من التقديم حتى الحل النهائي.
+    
+    Attributes:
+        id (UUIDField): معرف فريد للشكوى (UUID)
+        complaint_number (CharField): رقم الشكوى المرئي للمستخدمين
+        title (CharField): عنوان الشكوى
+        description (TextField): وصف مفصل للشكوى
+        complaint_type (ForeignKey): نوع الشكوى
+        priority (CharField): مستوى الأولوية
+        complainant (ForeignKey): المستخدم مقدم الشكوى
+        assigned_to (ForeignKey): المسؤول المعين للمتابعة
+        governorate (ForeignKey): المحافظة المرتبطة بالشكوى
+        city (CharField): المدينة
+        district (CharField): الحي (اختياري)
+        detailed_location (TextField): الموقع التفصيلي
+        contact_phone (CharField): رقم التواصل
+        status (CharField): حالة الشكوى الحالية
+        admin_notes (TextField): ملاحظات الإدارة
+        resolution_notes (TextField): ملاحظات الحل
+        complainant_satisfaction (PositiveIntegerField): تقييم المشتكي (1-5)
+        
+    Status Flow (تدفق الحالات):
+        1. pending: في الانتظار (الحالة الافتراضية)
+        2. under_review: قيد المراجعة (بدء المراجعة الإدارية)
+        3. assigned: تم التعيين (تعيين مسؤول للمتابعة)
+        4. in_progress: قيد التنفيذ (بدء العمل على الحل)
+        5. resolved: تم الحل (انتهاء المعالجة)
+        6. rejected: مرفوضة (شكوى غير صالحة)
+        7. closed: مغلقة (إغلاق نهائي)
+        
+    Business Logic:
+        - كل شكوى لها رقم فريد يتم توليده تلقائياً
+        - الأولوية تؤثر على ترتيب المعالجة
+        - التعيين للمسؤولين يتم حسب المحافظة ونوع الشكوى
+        - التقييم يتم بعد الحل من قبل المشتكي
+        - الملاحظات الإدارية للاستخدام الداخلي فقط
+        
+    Security Considerations:
+        - المشتكي يرى شكاواه فقط
+        - المديرون يرون جميع الشكاوى
+        - المسؤولون المعينون يرون الشكاوى المعينة لهم
+        - معلومات التواصل محمية ولا تظهر للعامة
+    """
     
     STATUS_CHOICES = [
         ('pending', 'في الانتظار'),
@@ -241,18 +347,51 @@ class Complaint(models.Model):
         super().save(*args, **kwargs)
     
     def get_age_in_days(self):
-        """حساب عمر الشكوى بالأيام"""
+        """
+        حساب عمر الشكوى بالأيام منذ تاريخ الإنشاء
+        
+        Returns:
+            int: عدد الأيام منذ إنشاء الشكوى
+            
+        Usage:
+            يستخدم في حساب الإحصائيات ومراقبة الأداء
+            مفيد لتحديد الشكاوى المتأخرة
+        """
         return (timezone.now() - self.created_at).days
     
     def is_overdue(self):
-        """التحقق من تجاوز الوقت المتوقع للحل"""
+        """
+        التحقق من تجاوز الشكوى للوقت المتوقع للحل
+        
+        Returns:
+            bool: True إذا كانت الشكوى متأخرة، False إذا كانت في الوقت المحدد
+            
+        Business Logic:
+            - الشكاوى المحلولة أو المغلقة لا تعتبر متأخرة
+            - يتم المقارنة مع الوقت المتوقع للحل حسب نوع الشكوى
+            - يساعد في تحديد أولويات المتابعة
+        """
         if self.status in ['resolved', 'closed']:
             return False
         expected_days = self.complaint_type.estimated_resolution_days
         return self.get_age_in_days() > expected_days
     
     def get_status_color(self):
-        """إرجاع لون الحالة"""
+        """
+        إرجاع لون الحالة للعرض في الواجهة
+        
+        Returns:
+            str: كود اللون بصيغة HEX
+            
+        Color Scheme:
+            - pending: أصفر (#FFC107) - في الانتظار
+            - under_review: أزرق فاتح (#17A2B8) - قيد المراجعة  
+            - assigned: أزرق (#007BFF) - تم التعيين
+            - in_progress: بنفسجي (#6F42C1) - قيد التنفيذ
+            - resolved: أخضر (#28A745) - تم الحل
+            - rejected: أحمر (#DC3545) - مرفوضة
+            - closed: رمادي (#6C757D) - مغلقة
+        """
         colors = {
             'pending': '#FFC107',
             'under_review': '#17A2B8',
@@ -265,7 +404,22 @@ class Complaint(models.Model):
         return colors.get(self.status, '#6C757D')
     
     def get_priority_weight(self):
-        """إرجاع وزن الأولوية للترتيب"""
+        """
+        إرجاع وزن الأولوية للترتيب والفلترة
+        
+        Returns:
+            int: وزن الأولوية (1-4)
+            
+        Priority Weights:
+            - low: 1 (أولوية منخفضة)
+            - medium: 2 (أولوية متوسطة) - الافتراضي
+            - high: 3 (أولوية عالية)
+            - urgent: 4 (أولوية عاجلة)
+            
+        Usage:
+            يستخدم في ترتيب الشكاوى حسب الأولوية
+            مفيد في خوارزميات التعيين التلقائي
+        """
         weights = {'low': 1, 'medium': 2, 'high': 3, 'urgent': 4}
         return weights.get(self.priority, 2)
 
